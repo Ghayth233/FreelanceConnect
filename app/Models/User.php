@@ -6,80 +6,43 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    /** @use HasFactory<\Database\Factories\UserFactory> */
+    use HasFactory, Notifiable;
 
-    const ROLE_CLIENT = 'client';
-    const ROLE_FREELANCE = 'freelance';
-    const ROLE_ADMIN = 'admin';
-
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
     protected $fillable = [
         'name',
         'email',
         'password',
-        'role',
-        'competences',
-        'bio',
-        'taux_horaire',
     ];
 
-    protected $casts = [
-        'competences' => 'array',
-        'email_verified_at' => 'datetime',
-    ];
-
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    protected $casts = [
-        'email_verified_at' => 'datetime',
-        'competences' => 'array',
-        'taux_horaire' => 'float',
-    ];
-
-    public function travaux()
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
     {
-        return $this->hasMany(Travail::class, 'user_id');
-    }
-
-    public function offres()
-    {
-        return $this->hasMany(Offre::class, 'freelance_id');
-    }
-
-    public function isFreelance()
-    {
-        return $this->role === self::ROLE_FREELANCE;
-    }
-
-    public function isClient(): bool
-    {
-        return $this->role === 'client';
-    }
-
-    public function isFreelance(): bool
-    {
-        return $this->role === 'freelance';
-    }
-
-    public function hasRole($role): bool
-    {
-        if (is_array($role)) {
-            return in_array($this->role, $role);
-        }
-        return $this->role === $role;
-    }
-
-    public function hasAnyRole($roles): bool
-    {
-        if (is_array($roles)) {
-            return in_array($this->role, $roles);
-        }
-        return $this->hasRole($roles);
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
     }
 }

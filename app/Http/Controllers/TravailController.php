@@ -4,34 +4,47 @@ namespace App\Http\Controllers;
 
 use App\Models\Travail;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Validator;
 
 class TravailController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('auth');
-    }
-
     /**
      * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
      */
-    public function index()
+    public function index(Request $request)
     {
-        $travaux = Travail::where('user_id', Auth::id())
-            ->latest()
-            ->paginate(10);
-
-        return view('travaux.index', compact('travaux'));
+        $query = Travail::where('statut', 'disponible');
+        
+        // Gestion de la recherche
+        if ($request->has('search')) {
+            $search = $request->input('search');
+            $query->where(function($q) use ($search) {
+                $q->where('titre', 'LIKE', "%{$search}%")
+                  ->orWhere('description', 'LIKE', "%{$search}%")
+                  ->orWhere('categorie', 'LIKE', "%{$search}%");
+            });
+        }
+        
+        // Gestion du filtre par catégorie
+        if ($request->has('categorie') && $request->categorie !== 'toutes') {
+            $query->where('categorie', $request->categorie);
+        }
+        
+        // Tri et pagination (3 éléments par page)
+        $travaux = $query->orderBy('created_at', 'desc')
+                        ->paginate(3)
+                        ->appends($request->query());
+        
+        // Récupérer les catégories uniques pour le filtre
+        $categories = Travail::select('categorie')
+                           ->distinct()
+                           ->pluck('categorie');
+            
+        return view('travaux.index', compact('travaux', 'categories'));
     }
 
     /**
      * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
      */
     public function create()
     {
@@ -40,101 +53,67 @@ class TravailController extends Controller
 
     /**
      * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
             'titre' => 'required|string|max:255',
-            'description' => 'required|string',
+            'description' => 'required|string|min:16',
             'budget' => 'required|numeric|min:0',
+            'categorie' => 'required|string|max:100',
             'date_limite' => 'required|date|after:today',
         ]);
 
-        $travail = new Travail($validated);
-        $travail->user_id = Auth::id();
-        $travail->slug = Str::slug($validated['titre']) . '-' . uniqid();
-        $travail->save();
-
+        $travail = Travail::create($validated);
+        
         return redirect()->route('travaux.show', $travail)
             ->with('success', 'Travail publié avec succès !');
     }
 
     /**
      * Display the specified resource.
-     *
-     * @param  \App\Models\Travail  $travail
-     * @return \Illuminate\Http\Response
      */
     public function show(Travail $travail)
     {
-        $this->authorize('view', $travail);
-        $offres = $travail->offres()->with('freelance')->latest()->get();
-        
-        return view('travaux.show', compact('travail', 'offres'));
+        return view('travaux.show', compact('travail'));
     }
 
     /**
      * Show the form for editing the specified resource.
-     *
-     * @param  \App\Models\Travail  $travail
-     * @return \Illuminate\Http\Response
      */
     public function edit(Travail $travail)
     {
-        $this->authorize('update', $travail);
         return view('travaux.edit', compact('travail'));
     }
 
     /**
      * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Travail  $travail
-     * @return \Illuminate\Http\Response
      */
     public function update(Request $request, Travail $travail)
     {
-        $this->authorize('update', $travail);
-
         $validated = $request->validate([
             'titre' => 'required|string|max:255',
             'description' => 'required|string',
             'budget' => 'required|numeric|min:0',
-            'date_limite' => 'required|date|after:today',
-            'statut' => 'required|in:ouvert,en_cours,termine,annule',
+            'categorie' => 'required|string|max:100',
+            'statut' => 'required|in:disponible,en_cours,termine',
+            'date_limite' => 'required|date',
         ]);
 
         $travail->update($validated);
-
+        
         return redirect()->route('travaux.show', $travail)
             ->with('success', 'Travail mis à jour avec succès !');
     }
 
     /**
      * Remove the specified resource from storage.
-     *
-     * @param  \App\Models\Travail  $travail
-     * @return \Illuminate\Http\Response
      */
     public function destroy(Travail $travail)
     {
-        $this->authorize('delete', $travail);
         $travail->delete();
-
+        
         return redirect()->route('travaux.index')
             ->with('success', 'Travail supprimé avec succès !');
-    }
-
-    public function all()
-    {
-        $travaux = Travail::where('statut', 'ouvert')
-            ->with('client')
-            ->latest()
-            ->paginate(12);
-
-        return view('travaux.all', compact('travaux'));
     }
 }
